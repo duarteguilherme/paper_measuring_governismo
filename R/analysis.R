@@ -57,6 +57,17 @@ obtain_governismo <- function(data) {
 }
   
 
+obtain_governismo_party <- function(data) {
+  data %>%
+    mutate(month = lubridate::month(vote_date),
+           year = lubridate::year(vote_date)) %>%
+    group_by(month, year, rollcall_id, legislator_party) %>%
+    summarise(governismo = mean(governismo, na.rm=T)) %>%
+    mutate(date = lubridate::dmy(glue::glue("27/{month}/{year}"))) %>%
+    group_by(date, legislator_party) %>%
+    summarise(governismo = mean(governismo, na.rm=T))
+}
+
 create_lag3 <- function(governismo) {
    (governismo + lag(governismo, 1) +
              lag(governismo,2))/3
@@ -95,6 +106,7 @@ governismos <- bind_rows(bind_rows(governismo_cham) %>%
 
 
 governismos <- governismos %>%
+  arrange(date) %>%
   mutate(governismo3 = create_lag3(governismo),
          governismo6 = create_lag6(governismo),
          governismo12 = create_lag12(governismo)) %>%
@@ -108,6 +120,52 @@ governismos <- governismos %>%
 ggplot(data = governismos, aes(x = date, y = governismo)) +
   geom_line() +
   facet_grid(lag ~ casa)
+
+# Governismo in the Senate and in the Chamber aren't correlated
+
+
+# Plotting scatterplots of governismo between the Chamber and the Senate
+ggplot(data = governismos %>%
+         spread(casa, governismo), 
+       aes(x = `Chamber`, y = `Senate`)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  facet_grid(~ lag) 
+
+
+ggplot(data = bind_rows(governismo_sen), aes(x = date, y = governismo)) +
+  geom_line()
+
+
+
+
+
+# Analyzing the same results regarding party
+
+governismo_cham_party <- map(cham, obtain_governismo_party)
+governismo_sen_party <- map(sen, obtain_governismo_party)
+
+
+
+
+governismos_party <- bind_rows(bind_rows(governismo_cham_party) %>%
+                           mutate(casa = "Chamber"),
+                         bind_rows(governismo_sen_party) %>%
+                           mutate(casa = "Senate"))
+
+
+governismos_party <- governismos_party %>%
+  arrange(date) %>%
+  group_by(legislator_party) %>%
+  mutate(governismo = create_lag6(governismo)) %>%
+  ungroup() %>%
+  filter(legislator_party %in% c("PT", "PSDB", "PMDB", "PP"))
+
+
+# Plotting comparative cham and senate
+ggplot(data = governismos_party, aes(x = date, y = governismo)) +
+  geom_line() +
+  facet_grid(legislator_party ~ casa)
 
 # Governismo in the Senate and in the Chamber aren't correlated
 
