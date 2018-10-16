@@ -221,7 +221,8 @@ create_stan_dataset <- function(dataset, party = F) {
     max_l = max(dataset$stan_legislator_id),
     y = dataset$governismo,
     l = dataset$stan_legislator_id,
-    p = dataset$stan_party_id
+    p = dataset$stan_party_id,
+    t = dataset$t
 )
   if ( party ) {
     stan_list <- c(stan_list, 
