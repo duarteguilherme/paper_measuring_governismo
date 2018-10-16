@@ -49,7 +49,7 @@ obtain_governismo <- function(data) {
   data %>%
     mutate(month = lubridate::month(vote_date),
            year = lubridate::year(vote_date)) %>%
-   group_by(month, year, rollcall_id) %>%
+   group_by(month, year) %>%
     summarise(governismo = mean(governismo, na.rm=T)) %>%
     mutate(date = lubridate::dmy(glue::glue("27/{month}/{year}"))) %>%
     group_by(date) %>%
@@ -61,7 +61,7 @@ obtain_governismo_party <- function(data) {
   data %>%
     mutate(month = lubridate::month(vote_date),
            year = lubridate::year(vote_date)) %>%
-    group_by(month, year, rollcall_id, legislator_party) %>%
+    group_by(month, year, legislator_party) %>%
     summarise(governismo = mean(governismo, na.rm=T)) %>%
     mutate(date = lubridate::dmy(glue::glue("27/{month}/{year}"))) %>%
     group_by(date, legislator_party) %>%
@@ -117,24 +117,24 @@ governismos <- governismos %>%
 
 
 # Plotting comparative cham and senate
-ggplot(data = governismos, aes(x = date, y = governismo)) +
+comparative_ma_cham_sen <- ggplot(data = governismos, aes(x = date, y = governismo)) +
   geom_line() +
   facet_grid(lag ~ casa)
+ggsave(plot = comparative_ma_cham_sen, filename = "img/comparative_ma_cham_sen.png")
 
 # Governismo in the Senate and in the Chamber aren't correlated
 
 
 # Plotting scatterplots of governismo between the Chamber and the Senate
-ggplot(data = governismos %>%
-         spread(casa, governismo), 
-       aes(x = `Chamber`, y = `Senate`)) +
+cor_ma_cham_sen_governismo <- 
+  ggplot(data = governismos %>%
+         spread(casa, governismo) %>%
+           filter(lag == "6"), 
+       aes(x = `Chamber`, y = `Senate`) ) +
   geom_point() +
   geom_smooth(method = "lm") +
   facet_grid(~ lag) 
-
-
-ggplot(data = bind_rows(governismo_sen), aes(x = date, y = governismo)) +
-  geom_line()
+ggsave(plot = cor_ma_cham_sen_governismo, filename = "img/cor_ma_cham_sen_governismo.png")
 
 
 
@@ -163,24 +163,81 @@ governismos_party <- governismos_party %>%
 
 
 # Plotting comparative cham and senate
-ggplot(data = governismos_party, aes(x = date, y = governismo)) +
+governismo_party <- ggplot(data = governismos_party, aes(x = date, y = governismo)) +
   geom_line() +
   facet_grid(legislator_party ~ casa)
-
+ggsave(filename = "img/governismo_party.png",governismo_party)
 # Governismo in the Senate and in the Chamber aren't correlated
 
 
-# Plotting scatterplots of governismo between the Chamber and the Senate
-ggplot(data = governismos %>%
-         spread(casa, governismo), 
-       aes(x = `Chamber`, y = `Senate`)) +
-  geom_point() +
-  geom_smooth(method = "lm") +
-  facet_grid(~ lag) +
-  scale_x_log10() +
-  scale_y_log10()
 
 
-ggplot(data = bind_rows(governismo_sen), aes(x = date, y = governismo)) +
-  geom_line()
 
+
+
+# ******************************************************************
+### Second part - Estimating individual governismo
+# ******************************************************************
+
+
+
+
+add_t_and_id <- function(dataset) {
+# This function gets a dataset of legislative data
+# and returns a similar dataset with new index
+# and t variable
+
+  # Creating index
+  dataset <- dataset %>%
+    mutate(stan_legislator_id = as.integer(as.factor(legislator_id)),
+           stan_party_id = as.integer(as.factor(legislator_party)))
+
+  # Creating variable t
+  # t will represent a particular week
+  # we could define it as a day
+  # however, the model will take too long to run
+  
+  t_dataset <- tibble(
+    week_date = seq(min(dataset$vote_date), max(dataset$vote_date), 7)
+  ) %>%
+    arrange(week_date) %>%
+    mutate(t = as.integer(as.factor(week_date))) %>%
+    mutate(vote_date = map(week_date, function(x) x + 0:6 )) %>%
+    unnest(vote_date)
+  
+  dataset <- inner_join(dataset, t_dataset)
+  dataset
+}
+
+
+create_stan_dataset <- function(dataset, party = F) {
+  # This function creates a dataset
+  # for running models in Stan
+  # It gets a dataset produced in
+  # add_t_and_id
+  stan_list <- list(
+    max_t = max(dataset$t),
+    n = nrow(dataset),
+    max_l = max(dataset$stan_legislator_id),
+    y = dataset$governismo,
+    l = dataset$stan_legislator_id,
+    p = dataset$stan_party_id
+)
+  if ( party ) {
+    stan_list <- c(stan_list, 
+                   list(max_party = max(dataset$stan_party_id),    
+                        p = dataset$stan_party_id)
+    )
+  }
+  stan_list
+}
+
+
+
+cham_datasets <- map(cham, add_t_and_id)
+sen_datasets <- map(sen, add_t_and_id)
+
+
+
+cham_stan_lists <- map(cham_datasets, create_stan_dataset)
+sen_stan_lists <- map(sen_datasets, create_stan_dataset)
