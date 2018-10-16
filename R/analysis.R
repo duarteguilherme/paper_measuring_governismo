@@ -172,6 +172,104 @@ ggsave(filename = "img/governismo_party.png",governismo_party)
 
 
 
+# ***********************************************************
+#  Second model 1 - Statical model
+# ***********************************************************
+
+
+
+
+add_id <- function(dataset) {
+  # This function gets a dataset of legislative data
+  # and returns a similar dataset with new index
+  
+  # Creating index
+  dataset <- dataset %>%
+    mutate(stan_legislator_id = as.integer(as.factor(legislator_id)),
+           stan_party_id = as.integer(as.factor(legislator_party)))
+  
+  dataset
+}
+
+
+create_stan_dataset <- function(dataset, time = F, party = F) {
+  # This function creates a dataset
+  # for running models in Stan
+  # It gets a dataset produced in
+  # add_t_and_id
+  stan_list <- list(
+    n = nrow(dataset),
+    max_l = max(dataset$stan_legislator_id),
+    y = dataset$governismo,
+    l = dataset$stan_legislator_id
+  )
+  if ( time ) {
+    stan_list <- c(stan_list, list(max_t = max(dataset$t),
+    t = dataset$t))
+  }
+  if ( party ) {
+    stan_list <- c(stan_list, 
+                   list(max_party = max(dataset$stan_party_id),    
+                        p = dataset$stan_party_id)
+    )
+  }
+  stan_list
+}
+
+
+
+cham_datasets <- map(cham, add_id)
+sen_datasets <- map(sen, add_id)
+
+
+
+cham_stan_lists <- map(cham_datasets, create_stan_dataset)
+sen_stan_lists <- map(sen_datasets, create_stan_dataset)
+
+
+model1_code <- 
+  '
+data {
+  int<lower=0> n;
+  int<lower=0> max_l;
+  int<lower=0> y[n];
+  int<lower=0> l[n];
+}
+parameters {
+  vector<lower=0, upper=1>[max_l] mu;
+}
+model {
+  mu ~ uniform(0,1);
+
+  for (i in 1:n) {
+    y[i] ~ bernoulli(mu[l[i]]);
+  }
+}
+'
+
+cat("Compiling model1 \n\n")
+cat("**************************************************************************\n\n")
+
+model1 <- stan_model(model_code = model1_code)
+
+# Saving model1
+#saveRDS(object = model1, file = "data/model1.rds")
+model1 <- readRDS("data/model1.rds")
+
+
+model1_cham_samples <- map(cham_stan_lists, 
+  ~ sampling(model1, 
+            data = .x,
+            iter = 2500, chains = 1))
+saveRDS(object = model1_cham_samples, file = 'data/model1_cham_samples.rds')
+
+model1_sen_samples <- map(sen_stan_lists, 
+                      ~ sampling(model1, 
+                                 data = .x,
+                                 iter = 2500, chains = 1))
+
+
+saveRDS(object = model1_sen_samples, file = 'data/model1_sen_samples.rds')
 
 
 
@@ -186,7 +284,8 @@ add_t_and_id <- function(dataset) {
 # This function gets a dataset of legislative data
 # and returns a similar dataset with new index
 # and t variable
-
+  
+  
   # Creating index
   dataset <- dataset %>%
     mutate(stan_legislator_id = as.integer(as.factor(legislator_id)),
@@ -197,12 +296,13 @@ add_t_and_id <- function(dataset) {
   # we could define it as a day
   # however, the model will take too long to run
   
+  day_interval <- 360 # each 120 days a new measure
   t_dataset <- tibble(
-    week_date = seq(min(dataset$vote_date), max(dataset$vote_date), 7)
+    week_date = seq(min(dataset$vote_date), max(dataset$vote_date), day_interval)
   ) %>%
     arrange(week_date) %>%
     mutate(t = as.integer(as.factor(week_date))) %>%
-    mutate(vote_date = map(week_date, function(x) x + 0:6 )) %>%
+    mutate(vote_date = map(week_date, function(x) x + 0:day_interval )) %>%
     unnest(vote_date)
   
   dataset <- inner_join(dataset, t_dataset)
