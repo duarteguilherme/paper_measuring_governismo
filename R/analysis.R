@@ -272,7 +272,13 @@ model {
 
 cat("Compiling model1 \n\n")
 cat("**************************************************************************\n\n")
-model1 <- stan_model(model_code = model1_code)
+
+#model1 <- stan_model(model_code = model1_code)
+
+# Saving model1
+#saveRDS(object = model1, file = "data/model1.rds")
+model1 <- readRDS("data/model1.rds")
+
 
 model1_cham_samples <- map(cham_stan_lists, 
   ~ sampling(model1, 
