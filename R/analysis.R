@@ -253,6 +253,7 @@ data {
   int<lower=0> y[n];
   int<lower=0> l[n];
   int<lower=0> p[n];
+  int<lower=0> t[n];
 }
 parameters {
   vector<lower=0, upper=1> [max_t] mu[max_l];
