@@ -241,3 +241,48 @@ sen_datasets <- map(sen, add_t_and_id)
 
 cham_stan_lists <- map(cham_datasets, create_stan_dataset)
 sen_stan_lists <- map(sen_datasets, create_stan_dataset)
+
+
+model1_code <- 
+'
+data {
+  int<lower=0> max_t;
+  int<lower=0> n;
+  int<lower=0> max_l;
+  int<lower=0> y[n];
+  int<lower=0> l[n];
+  int<lower=0> p[n];
+}
+parameters {
+  vector<lower=0, upper=1> [max_t] mu[max_l];
+  
+}
+model {
+   mu[1] ~ uniform(0,1);
+   for (i in 2:max_t)
+      mu[i] ~ normal(mu[i-1], 0.005);
+  
+   for (i in 1:n) {
+      y[i] ~ bernoulli(mu[t[i]]);
+   }
+}
+'
+
+cat("Compiling model1 \n\n")
+cat("**************************************************************************\n\n")
+model1 <- stan_model(model_code = model1_code)
+
+model1_cham_samples <- map(cham_stan_lists, 
+  ~ sampling(model1, 
+            data = .x,
+            iter = 2500, chains = 1))
+saveRDS(object = model1_cham_samples, file = 'data/model1_cham_samples.rds')
+
+model1_sen_samples <- map(sen_stan_lists, 
+                      ~ sampling(model1, 
+                                 data = .x,
+                                 iter = 2500, chains = 1))
+
+
+saveRDS(object = model1_sen_samples, file = 'data/model1_sen_samples.rds')
+
