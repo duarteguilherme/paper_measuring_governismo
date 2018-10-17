@@ -6,6 +6,7 @@ library(tidyr)
 library(purrr)
 library(stringr)
 library(lubridate)
+library(furrr)
 
 # Loading datasets
 cham_dataset <- readRDS('data/cham_total.rds') %>% distinct()
@@ -253,23 +254,20 @@ cat("**************************************************************************\
 model1 <- stan_model(model_code = model1_code)
 
 # Saving model1
-#saveRDS(object = model1, file = "data/model1.rds")
+saveRDS(object = model1, file = "data/model1.rds")
 model1 <- readRDS("data/model1.rds")
 
 
-model1_cham_samples <- map(cham_stan_lists, 
+model1_samples <- future_map(c(cham_stan_lists, 
+                                  sen_stan_lists),
   ~ sampling(model1, 
             data = .x,
             iter = 2500, chains = 1))
-saveRDS(object = model1_cham_samples, file = 'data/model1_cham_samples.rds')
 
-model1_sen_samples <- map(sen_stan_lists, 
-                      ~ sampling(model1, 
-                                 data = .x,
-                                 iter = 2500, chains = 1))
+saveRDS(object = model1_samples[1:4], file = 'data/model1_cham_samples_test.rds')
 
 
-saveRDS(object = model1_sen_samples, file = 'data/model1_sen_samples.rds')
+saveRDS(object = model1_samples[5:8], file = 'data/model1_sen_samples_test.rds')
 
 
 
@@ -296,7 +294,7 @@ add_t_and_id <- function(dataset) {
   # we could define it as a day
   # however, the model will take too long to run
   
-  day_interval <- 360 # each 120 days a new measure
+  day_interval <- 30 # each 120 days a new measure
   t_dataset <- tibble(
     week_date = seq(min(dataset$vote_date), max(dataset$vote_date), day_interval)
   ) %>%
@@ -310,28 +308,6 @@ add_t_and_id <- function(dataset) {
 }
 
 
-create_stan_dataset <- function(dataset, party = F) {
-  # This function creates a dataset
-  # for running models in Stan
-  # It gets a dataset produced in
-  # add_t_and_id
-  stan_list <- list(
-    max_t = max(dataset$t),
-    n = nrow(dataset),
-    max_l = max(dataset$stan_legislator_id),
-    y = dataset$governismo,
-    l = dataset$stan_legislator_id,
-    p = dataset$stan_party_id,
-    t = dataset$t
-)
-  if ( party ) {
-    stan_list <- c(stan_list, 
-                   list(max_party = max(dataset$stan_party_id),    
-                        p = dataset$stan_party_id)
-    )
-  }
-  stan_list
-}
 
 
 
@@ -340,57 +316,55 @@ sen_datasets <- map(sen, add_t_and_id)
 
 
 
-cham_stan_lists <- map(cham_datasets, create_stan_dataset)
-sen_stan_lists <- map(sen_datasets, create_stan_dataset)
+cham_stan_lists <- map(cham_datasets, ~ create_stan_dataset(.x, time = T))
+sen_stan_lists <- map(sen_datasets, ~ create_stan_dataset(.x, time = T))
 
 
-model1_code <- 
+model2_code <- 
 '
 data {
-  int<lower=0> max_t;
   int<lower=0> n;
   int<lower=0> max_l;
   int<lower=0> y[n];
   int<lower=0> l[n];
-  int<lower=0> p[n];
+  int<lower=0> max_t;
   int<lower=0> t[n];
 }
 parameters {
-  vector<lower=0, upper=1> [max_t] mu[max_l];
+  vector<lower=0, upper=1>[max_l] mu[max_t];
   
 }
 model {
    mu[1] ~ uniform(0,1);
    for (i in 2:max_t)
-      mu[i] ~ normal(mu[i-1], 0.005);
+      mu[i] ~ normal(mu[i-1], 0.008);
   
    for (i in 1:n) {
-      y[i] ~ bernoulli(mu[t[i]]);
+      y[i] ~ bernoulli(mu[t[i], l[i]]);
    }
 }
 '
 
-cat("Compiling model1 \n\n")
+cat("Compiling model2 \n\n")
 cat("**************************************************************************\n\n")
 
-#model1 <- stan_model(model_code = model1_code)
+model2 <- stan_model(model_code = model2_code)
 
 # Saving model1
-#saveRDS(object = model1, file = "data/model1.rds")
-model1 <- readRDS("data/model1.rds")
+saveRDS(object = model1, file = "data/model2.rds")
+model2 <- readRDS("data/model2.rds")
 
 
-model1_cham_samples <- map(cham_stan_lists, 
-  ~ sampling(model1, 
-            data = .x,
-            iter = 2500, chains = 1))
-saveRDS(object = model1_cham_samples, file = 'data/model1_cham_samples.rds')
 
-model1_sen_samples <- map(sen_stan_lists, 
-                      ~ sampling(model1, 
-                                 data = .x,
-                                 iter = 2500, chains = 1))
+model2_samples <- future_map(c(cham_stan_lists, 
+                               sen_stan_lists),
+                             ~ sampling(model2, 
+                                        data = .x,
+                                        iter = 2500, chains = 1))
+
+saveRDS(object = model2_samples[1:4], file = 'data/model2_cham_samples_test.rds')
 
 
-saveRDS(object = model1_sen_samples, file = 'data/model1_sen_samples.rds')
+saveRDS(object = model2_samples[5:8], file = 'data/model2_sen_samples_test.rds')
+
 
