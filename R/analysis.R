@@ -257,6 +257,7 @@ model1 <- stan_model(model_code = model1_code)
 saveRDS(object = model1, file = "data/model1.rds")
 model1 <- readRDS("data/model1.rds")
 
+plan(multiprocess)
 
 model1_samples <- future_map(c(cham_stan_lists, 
                                   sen_stan_lists),
@@ -264,10 +265,10 @@ model1_samples <- future_map(c(cham_stan_lists,
             data = .x,
             iter = 2500, chains = 1))
 
-saveRDS(object = model1_samples[1:4], file = 'data/model1_cham_samples_test.rds')
+saveRDS(object = model1_samples[1:4], file = 'data/model1_cham_samples.rds')
 
 
-saveRDS(object = model1_samples[5:8], file = 'data/model1_sen_samples_test.rds')
+saveRDS(object = model1_samples[5:8], file = 'data/model1_sen_samples.rds')
 
 
 
@@ -294,7 +295,7 @@ add_t_and_id <- function(dataset) {
   # we could define it as a day
   # however, the model will take too long to run
   
-  day_interval <- 30 # each 120 days a new measure
+  day_interval <- 7 # each 7 days a new measure
   t_dataset <- tibble(
     week_date = seq(min(dataset$vote_date), max(dataset$vote_date), day_interval)
   ) %>%
@@ -355,6 +356,7 @@ saveRDS(object = model1, file = "data/model2.rds")
 model2 <- readRDS("data/model2.rds")
 
 
+plan(multiprocess)
 
 model2_samples <- future_map(c(cham_stan_lists, 
                                sen_stan_lists),
@@ -362,9 +364,9 @@ model2_samples <- future_map(c(cham_stan_lists,
                                         data = .x,
                                         iter = 2500, chains = 1))
 
-saveRDS(object = model2_samples[1:4], file = 'data/model2_cham_samples_test.rds')
+saveRDS(object = model2_samples[1:4], file = 'data/model2_cham_samples.rds')
 
 
-saveRDS(object = model2_samples[5:8], file = 'data/model2_sen_samples_test.rds')
+saveRDS(object = model2_samples[5:8], file = 'data/model2_sen_samples.rds')
 
 
