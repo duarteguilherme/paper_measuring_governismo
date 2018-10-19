@@ -107,7 +107,7 @@ governismos <- bind_rows(bind_rows(governismo_cham) %>%
 
 
 governismos <- governismos %>%
-  arrange(date) %>%
+  arrange(casa, date) %>%
   mutate(governismo3 = create_lag3(governismo),
          governismo6 = create_lag6(governismo),
          governismo12 = create_lag12(governismo)) %>%
@@ -156,7 +156,7 @@ governismos_party <- bind_rows(bind_rows(governismo_cham_party) %>%
 
 
 governismos_party <- governismos_party %>%
-  arrange(date) %>%
+  arrange(casa, date) %>%
   group_by(legislator_party) %>%
   mutate(governismo = create_lag6(governismo)) %>%
   ungroup() %>%
