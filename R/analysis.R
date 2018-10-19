@@ -271,6 +271,78 @@ saveRDS(object = model1_samples[1:4], file = 'data/model1_cham_samples.rds')
 saveRDS(object = model1_samples[5:8], file = 'data/model1_sen_samples.rds')
 
 
+# Analyzing samples
+model1_cham_samples <-readRDS( 'data/model1_cham_samples.rds')
+model1_cham_samples <- map(model1_cham_samples, rstan::extract)
+
+model1_sen_samples <-readRDS( 'data/model1_sen_samples.rds')
+model1_sen_samples <- map(model1_sen_samples, rstan::extract)
+
+
+get_mean_quantiles <- function(sample) {
+  tibble(stan_legislator_id = 1:(dim(sample$mu)[2]),
+         mean = apply(sample$mu, 2, mean),
+         p025 = apply(sample$mu, 2, function(x) quantile(x, p = 0.025)),
+         p975 = apply(sample$mu, 2, function(x) quantile(x, p = 0.975))
+         )
+}
+
+quantities_model1_cham <- map(model1_cham_samples, get_mean_quantiles)
+quantities_model1_sen <- map(model1_sen_samples, get_mean_quantiles)
+
+terms <- c("Cardoso","Lula","Dilma", "Temer")
+base1_cham <- map2(cham_datasets, terms, ~ .x %>% mutate(term = .y))  %>%
+  bind_rows %>%
+  mutate(casa = "Chamber") %>%
+  distinct(legislator_name, stan_legislator_id, term, casa)
+base1_sen <- map2(sen_datasets, terms, ~ .x %>% mutate(term = .y)) %>%
+  bind_rows %>%
+  mutate(casa = "Senate")%>%
+  distinct(legislator_name, stan_legislator_id, term, casa)
+
+
+
+most_quantities_model1_cham <- map2(quantities_model1_cham, terms, ~ .x %>% mutate(term = .y)) %>%
+  map(~ .x %>% arrange(desc(mean)) %>% head(15)) %>%
+  bind_rows %>%
+  mutate(casa = "Chamber")
+most_quantities_model1_sen <- map2(quantities_model1_sen, terms, ~ .x %>% mutate(term = .y)) %>%
+  map(~ .x %>% arrange(desc(mean)) %>% head(15)) %>%
+  bind_rows %>%
+  mutate(casa = "Senate")
+
+
+least_quantities_model1_cham <- map2(quantities_model1_cham, terms, ~ .x %>% mutate(term = .y)) %>%
+  map(~ .x %>% arrange(mean) %>% head(15)) %>%
+  bind_rows %>%
+  mutate(casa = "Chamber")
+least_quantities_model1_sen <- map2(quantities_model1_sen, terms, ~ .x %>% mutate(term = .y)) %>%
+  map(~ .x %>% arrange(mean) %>% head(15)) %>%
+  bind_rows %>%
+  mutate(casa = "Senate")
+
+
+
+most_base1_cham <- inner_join(base1_cham, most_quantities_model1_cham)
+most_base1_sen <- inner_join(base1_sen, most_quantities_model1_sen)
+most_base <- bind_rows(most_base1_cham, most_base1_sen)
+
+least_base1_cham <- inner_join(base1_cham, least_quantities_model1_cham)
+least_base1_sen <- inner_join(base1_sen, least_quantities_model1_sen)
+least_base <- bind_rows(least_base1_cham, least_base1_sen)
+
+
+ggplot(most_base %>%
+         arrange(mean)) +
+  geom_point(aes(y = legislator_name, x = mean)) +
+#  geom_errorbarh(aes(xmin = p025, xmax = p975)) +
+  facet_grid(casa ~ term)
+
+
+ggplot(least_base) +
+  geom_point(aes(y = legislator_name, x = mean)) +
+#  geom_errorbarh(aes(xmin = p025, xmax = p975)) +
+  facet_wrap(casa ~ term)
 
 # ******************************************************************
 ### Second part - Estimating individual governismo
